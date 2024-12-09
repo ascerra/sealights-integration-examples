@@ -42,9 +42,7 @@ class SLListener:
             return
         print(f'{SEALIGHTS_LOG_TAG} {len(suite.tests)} tests in suite {suite.longname}')
         if not self.test_session_id:
-            # initialize the test session so that all the tests can be identified by SeaLights
             self.create_test_session()
-        # request the list of tests to be executed from SeaLights
         self.excluded_tests = set(self.get_excluded_tests())
         self.mark_tests_to_be_skipped(suite)
 
@@ -76,7 +74,7 @@ class SLListener:
         initialize_session_request = {'labId': self.labid, 'testStage': self.stage_name, 'bsid': self.bsid}
         response = requests.post(f'{self.base_url}/test-sessions', json=initialize_session_request,
                                  headers=self.get_header())
-
+        print(f'[SeaLights] Response body: {response.text}')  # Added debugging
         if not response.ok:
             print(f'{SEALIGHTS_LOG_TAG} Failed to open Test Session (Error {response.status_code}), disabling Sealights Listener')
         else:
@@ -87,6 +85,7 @@ class SLListener:
     def get_excluded_tests(self):
         excluded_tests = []
         recommendations = requests.get(f'{self.get_session_url()}/exclude-tests', headers=self.get_header())
+        print(f'[SeaLights] Response body: {recommendations.text}')  # Added debugging
         print(f'{SEALIGHTS_LOG_TAG} Retrieving Recommendations: {"OK" if recommendations.ok else f"Error {recommendations.status_code}"}')
         if recommendations.status_code == 200:
             excluded_tests = recommendations.json()["data"]
@@ -94,7 +93,6 @@ class SLListener:
         return excluded_tests
 
     def mark_tests_to_be_skipped(self, suite):
-        # Narrow the test suite to only the recommended tests by Sealights
         all_tests = set()
         for test in suite.tests:
             all_tests.add(test.name)
@@ -108,7 +106,6 @@ class SLListener:
         print(f'{SEALIGHTS_LOG_TAG} {len(tests_for_execution)} Tests for execution: {tests_for_execution}')
 
     def build_test_results(self, result):
-        # Collect and report test results to SeaLights including start and end time
         tests = []
         for test in result.tests:
             test_status = TEST_STATUS_MAP.get(test.status, "passed")
@@ -122,12 +119,14 @@ class SLListener:
             return
         print(f'{SEALIGHTS_LOG_TAG} {len(test_results)} Results to send: {test_results}')
         response = requests.post(self.get_session_url(), json=test_results, headers=self.get_header())
+        print(f'[SeaLights] Response body: {response.text}')  # Added debugging
         if not response.ok:
             print(f'{SEALIGHTS_LOG_TAG} Failed to upload results (Error {response.status_code})')
 
     def end_test_session(self):
         print(f'{SEALIGHTS_LOG_TAG} Deleting test session {self.test_session_id}')
-        requests.delete(self.get_session_url(), headers=self.get_header())
+        response = requests.delete(self.get_session_url(), headers=self.get_header())
+        print(f'[SeaLights] Response body: {response.text}')  # Added debugging
         self.test_session_id = ''
 
     def start_span(self, test_name):
