@@ -72,9 +72,11 @@ class SLListener:
 
     def create_test_session(self):
         initialize_session_request = {'labId': self.labid, 'testStage': self.stage_name, 'bsid': self.bsid}
+        print(f'{SEALIGHTS_LOG_TAG} Creating Test Session with payload: {initialize_session_request}')
         response = requests.post(f'{self.base_url}/test-sessions', json=initialize_session_request,
                                  headers=self.get_header())
-        print(f'[SeaLights] Response body: {response.text}')  # Added debugging
+        self.log_response_details(response)
+    
         if not response.ok:
             print(f'{SEALIGHTS_LOG_TAG} Failed to open Test Session (Error {response.status_code}), disabling Sealights Listener')
         else:
@@ -83,13 +85,14 @@ class SLListener:
             print(f'{SEALIGHTS_LOG_TAG} Test session opened, testSessionId: {self.test_session_id}')
 
     def get_excluded_tests(self):
-        excluded_tests = []
+        print(f'{SEALIGHTS_LOG_TAG} Fetching excluded tests...')
         recommendations = requests.get(f'{self.get_session_url()}/exclude-tests', headers=self.get_header())
-        print(f'[SeaLights] Response body: {recommendations.text}')  # Added debugging
-        print(f'{SEALIGHTS_LOG_TAG} Retrieving Recommendations: {"OK" if recommendations.ok else f"Error {recommendations.status_code}"}')
+        self.log_response_details(recommendations)
+        
+        excluded_tests = []
         if recommendations.status_code == 200:
-            excluded_tests = recommendations.json()["data"]
-        print(f'{SEALIGHTS_LOG_TAG} {len(self.excluded_tests)} Skipped tests: {excluded_tests}')
+            excluded_tests = recommendations.json().get("data", [])
+        print(f'{SEALIGHTS_LOG_TAG} {len(excluded_tests)} Skipped tests: {excluded_tests}')
         return excluded_tests
 
     def mark_tests_to_be_skipped(self, suite):
@@ -116,18 +119,30 @@ class SLListener:
 
     def send_test_results(self, test_results):
         if not test_results:
+            print(f'{SEALIGHTS_LOG_TAG} No test results to send.')
             return
-        print(f'{SEALIGHTS_LOG_TAG} {len(test_results)} Results to send: {test_results}')
+        print(f'{SEALIGHTS_LOG_TAG} Sending {len(test_results)} test results: {test_results}')
         response = requests.post(self.get_session_url(), json=test_results, headers=self.get_header())
-        print(f'[SeaLights] Response body: {response.text}')  # Added debugging
+        self.log_response_details(response)
+        
         if not response.ok:
             print(f'{SEALIGHTS_LOG_TAG} Failed to upload results (Error {response.status_code})')
 
+
     def end_test_session(self):
-        print(f'{SEALIGHTS_LOG_TAG} Deleting test session {self.test_session_id}')
+        print(f'{SEALIGHTS_LOG_TAG} Ending test session {self.test_session_id}')
         response = requests.delete(self.get_session_url(), headers=self.get_header())
-        print(f'[SeaLights] Response body: {response.text}')  # Added debugging
+        self.log_response_details(response)
         self.test_session_id = ''
+
+    # Helper method to log response details
+    def log_response_details(self, response):
+        print(f'{SEALIGHTS_LOG_TAG} Response status: {response.status_code}')
+        print(f'{SEALIGHTS_LOG_TAG} Response headers: {response.headers}')
+        try:
+            print(f'{SEALIGHTS_LOG_TAG} Response body: {response.json()}')
+        except ValueError:  # If response is not JSON
+            print(f'{SEALIGHTS_LOG_TAG} Response text: {response.text or "No Content"}')
 
     def start_span(self, test_name):
         test_span = self.spans.get(test_name)
